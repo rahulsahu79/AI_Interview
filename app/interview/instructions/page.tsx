@@ -1,4 +1,4 @@
-import { metadata as _metadata } from "next";
+import type { Metadata } from "next";
 import { instructionsData } from "@/constants/instructionsData";
 import InstructionsHero from "@/components/instructions/InstructionsHero";
 import InterviewOverview from "@/components/instructions/InterviewOverview";
@@ -9,7 +9,7 @@ import InterviewProcess from "@/components/instructions/InterviewProcess";
 import CandidateSummary from "@/components/instructions/CandidateSummary";
 import InstructionsInteractiveSection from "@/components/instructions/InstructionsInteractiveSection";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Interview Instructions — InterviewAI",
 };
 

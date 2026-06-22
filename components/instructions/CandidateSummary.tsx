@@ -4,9 +4,9 @@ import { motion } from "framer-motion";
 
 interface CandidateSummaryProps {
   profile: string;
-  skills: string[];
+  skills: readonly string[];
   projectsDetected: number;
-  focusAreas: string[];
+  focusAreas: readonly string[];
 }
 
 export default function CandidateSummary({ profile, skills, projectsDetected, focusAreas }: CandidateSummaryProps) {
