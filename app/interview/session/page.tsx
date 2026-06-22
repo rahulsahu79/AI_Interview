@@ -1,4 +1,3 @@
-import { metadata as _metadata } from "next";
 import InterviewSessionClient from "@/components/interview/InterviewSessionClient";
 
 export const metadata = {
