@@ -1,0 +1,50 @@
+# ==============================
+# FastAPI Backend
+# ==============================
+fastapi
+uvicorn[standard]
+python-multipart
+
+# ==============================
+# MongoDB
+# ==============================
+motor
+pymongo[srv]
+dnspython
+
+# ==============================
+# Validation & Configuration
+# ==============================
+pydantic
+pydantic-settings
+python-dotenv
+
+# ==============================
+# Resume Parsing
+# ==============================
+PyMuPDF
+pdfplumber
+python-docx
+
+# ==============================
+# OpenAI
+# ==============================
+openai
+
+# ==============================
+# File Handling & HTTP
+# ==============================
+aiofiles
+httpx
+orjson
+
+# ==============================
+# Logging
+# ==============================
+loguru
+
+# ==============================
+# Testing
+# ==============================
+pytest
+pytest-asyncio

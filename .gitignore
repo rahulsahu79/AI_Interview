@@ -1,6 +1,17 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==============================
+# Environment Variables & Secrets
+# ==============================
+.env
+.env*.local
+.env.*
+!.env.production
+!.env.example
+file.txt
+*.pem
 
-# dependencies
+# ==============================
+# Node.js / Next.js
+# ==============================
 /node_modules
 /.pnp
 .pnp.*
@@ -10,38 +21,65 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
 /.next/
 /out/
-
-# production
 /build
+.vercel
 
-# misc
-.DS_Store
-Thumbs.db
-ehthumbs.db
-[Dd]esktop.ini
-*.pem
-.vscode/
-.idea/
-
-# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.production
-
-# vercel
-.vercel
-
-# typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ==============================
+# Python / Virtual Environments
+# ==============================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==============================
+# Testing & Coverage
+# ==============================
+/coverage
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ==============================
+# User Uploads & Storage
+# ==============================
+app/uploads/*
+!app/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# ==============================
+# OS & IDE Caches
+# ==============================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
