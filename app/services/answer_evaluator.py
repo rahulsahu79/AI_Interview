@@ -2,6 +2,7 @@ import json
 from typing import Dict, Any, List
 from openai import OpenAI
 from app.core.config import settings
+from app.prompts.interview_prompts import build_answer_evaluation_prompt
 
 def get_ai_client():
     if settings.OPENROUTER_API_KEY:
@@ -41,23 +42,7 @@ async def evaluate_candidate_answer(question: str, answer: str) -> Dict[str, Any
     if not client:
         return fallback_answer_evaluation(question, answer)
 
-    prompt = f"""
-    You are an AI technical interviewer evaluating a candidate's answer.
-    
-    Question:
-    "{question}"
-    
-    Candidate Answer:
-    "{answer}"
-    
-    Provide an accurate, constructive technical evaluation in valid JSON with these keys:
-    {{
-      "score": <integer from 0 to 100>,
-      "feedback": "<concise actionable critique explaining strengths and omissions>",
-      "follow_up_question": "<a sharp technical follow-up digging deeper into their answer>",
-      "suggested_improvements": ["improvement 1", "improvement 2"]
-    }}
-    """
+    prompt = build_answer_evaluation_prompt(question, answer)
     try:
         response = client.chat.completions.create(
             model=settings.AI_MODEL,

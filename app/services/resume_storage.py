@@ -5,6 +5,7 @@ from fastapi import UploadFile
 from bson import ObjectId
 
 from app.core.database import database
+from app.models.resume import ResumeDocument
 from app.services.resume_parser import parse_resume
 from app.services.resume_service import analyze_resume_text
 
@@ -23,16 +24,17 @@ async def save_and_analyze_resume(file: UploadFile):
     resume_text = parse_resume(file_path, file_extension)
     analysis = await analyze_resume_text(resume_text)
 
-    resume_data = {
-        "original_filename": file.filename,
-        "saved_filename": unique_filename,
-        "file_path": file_path,
-        "resume_text": resume_text,
-        "analysis": analysis,
-        "created_at": datetime.now(timezone.utc)
-    }
+    doc_model = ResumeDocument(
+        original_filename=file.filename,
+        saved_filename=unique_filename,
+        file_path=file_path,
+        resume_text=resume_text,
+        analysis=analysis,
+        created_at=datetime.now(timezone.utc)
+    )
 
-    result = await database["resumes"].insert_one(resume_data)
+    resume_dict = doc_model.model_dump(by_alias=True, exclude={"id"})
+    result = await database["resumes"].insert_one(resume_dict)
 
     return {
         "resume_id": str(result.inserted_id),

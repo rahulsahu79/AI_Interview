@@ -3,6 +3,7 @@ import re
 from typing import Dict, Any, List
 from openai import OpenAI
 from app.core.config import settings
+from app.prompts.resume_prompts import build_resume_analysis_prompt
 
 def get_ai_client():
     if settings.OPENROUTER_API_KEY:
@@ -13,8 +14,6 @@ def get_ai_client():
     return None
 
 def fallback_resume_analysis(resume_text: str) -> Dict[str, Any]:
-    lines = [line.strip() for line in resume_text.splitlines() if line.strip()]
-    
     tech_pool = [
         "Python", "FastAPI", "Flask", "Django", "JavaScript", "TypeScript", "React", "Next.js",
         "Node.js", "Express", "MongoDB", "PostgreSQL", "MySQL", "MariaDB", "SQLite", "SQL", "Docker", "Kubernetes",
@@ -67,37 +66,7 @@ async def analyze_resume_text(resume_text: str) -> Dict[str, Any]:
     if not client:
         return fallback_resume_analysis(resume_text)
 
-    prompt = f"""
-    You are an expert technical interviewer and hiring committee evaluator.
-    Analyze the following complete resume text carefully and extract the candidate profile into valid JSON format.
-    
-    Make sure to:
-    1. Extract ALL degrees found in the EDUCATION section with their college and years.
-    2. Extract professional experience details (job titles, internships, companies, and durations).
-    3. Extract high-impact projects with technologies and descriptions.
-    4. Detect top technical skills.
-    
-    Full Resume Text:
-    \"\"\"{resume_text}\"\"\"
-    
-    Return ONLY a JSON object with this exact structure:
-    {{
-      "score": <float between 7.0 and 9.5 representing readiness score>,
-      "readiness": <string, e.g. "Interview Ready">,
-      "skills": [<string list of top 8-12 technical skills>],
-      "education": [<string list of degrees, colleges, and CGPA/dates found in EDUCATION>],
-      "experience": <string summarizing experience, e.g. "AI / Backend Developer Intern (Mobiloitte & Mavask)">,
-      "strengths": [<list of 3 key technical strengths>],
-      "improvements": [<list of 3 constructive technical areas to brush up>],
-      "projects": [
-        {{
-          "title": <string project title>,
-          "technologies": [<string list of tech used>],
-          "description": <concise 1-2 sentence description>
-        }}
-      ]
-    }}
-    """
+    prompt = build_resume_analysis_prompt(resume_text)
     try:
         response = client.chat.completions.create(
             model=settings.AI_MODEL,
