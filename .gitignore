@@ -1,0 +1,53 @@
+# Environment Variables & Secrets
+.env
+file.txt
+.env*.local
+.env.*
+!.env.example
+*.pem
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+
+# User uploads & Temporary files
+app/uploads/*
+!app/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# Databases (local SQLite, etc.)
+*.sqlite3
+*.db
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
