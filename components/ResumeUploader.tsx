@@ -4,10 +4,11 @@ import React, { useCallback, useMemo, useState } from "react";
 import UploadDropzone from "./UploadDropzone";
 import UploadProgress from "./UploadProgress";
 import { motion } from "framer-motion";
-import { FileText, CheckCircle } from "lucide-react";
+import { FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { uploadAndAnalyzeResume } from "../lib/api";
 
-export type UploaderState = "empty" | "uploading" | "uploaded";
+export type UploaderState = "empty" | "uploading" | "uploaded" | "error";
 
 interface UploadedMeta {
   name: string;
@@ -18,27 +19,35 @@ export default function ResumeUploader() {
   const [state, setState] = useState<UploaderState>("empty");
   const [progress, setProgress] = useState(0);
   const [file, setFile] = useState<UploadedMeta | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>("");
   const router = useRouter();
 
-  const onFileSelected = useCallback((f: File) => {
+  const onFileSelected = useCallback(async (f: File) => {
     const meta: UploadedMeta = { name: f.name, size: f.size };
     setFile(meta);
     setState("uploading");
-    setProgress(0);
+    setProgress(20);
+    setErrorMsg("");
 
-    // Mock upload
-    const total = 1200; // ms per step
-    let uploaded = 0;
-    const interval = setInterval(() => {
-      uploaded += Math.random() * 15 + 5;
-      const pct = Math.min(100, uploaded);
-      setProgress(pct);
-      if (pct >= 100) {
-        clearInterval(interval);
-        setState("uploaded");
-        setProgress(100);
+    const progressTimer = setInterval(() => {
+      setProgress((prev) => (prev < 85 ? prev + 15 : prev));
+    }, 200);
+
+    try {
+      const response = await uploadAndAnalyzeResume(f);
+      clearInterval(progressTimer);
+      setProgress(100);
+      setState("uploaded");
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("activeResumeId", response.data.resume_id);
+        sessionStorage.setItem("resumeAnalysis", JSON.stringify(response.data.analysis));
       }
-    }, 150);
+    } catch (err: any) {
+      clearInterval(progressTimer);
+      setState("error");
+      setErrorMsg(err.message || "Failed to process resume. Please ensure the backend is running.");
+    }
   }, []);
 
   const onAnalyze = useCallback(() => {
@@ -65,7 +74,7 @@ export default function ResumeUploader() {
             </div>
             <div>
               <h3 className="text-lg font-semibold">Upload your resume</h3>
-              <p className="text-sm text-slate-500">Get tailored feedback and mock interviews.</p>
+              <p className="text-sm text-slate-500">Get tailored feedback and live mock interviews.</p>
             </div>
           </div>
         </div>
@@ -78,6 +87,22 @@ export default function ResumeUploader() {
           {state === "uploading" && (
             <div className="space-y-4">
               <UploadProgress progress={progress} fileName={file?.name} fileSize={file?.size} />
+              <p className="text-xs text-center text-slate-500 animate-pulse">Extracting profile & generating analysis...</p>
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="flex items-center gap-3 text-red-700">
+                <AlertCircle size={20} />
+                <div className="flex-1 text-sm font-medium">{errorMsg}</div>
+                <button
+                  onClick={() => { setState("empty"); setFile(null); setProgress(0); }}
+                  className="rounded px-3 py-1 bg-white text-xs font-semibold text-red-600 shadow-sm border border-red-200"
+                >
+                  Try Again
+                </button>
+              </div>
             </div>
           )}
 
@@ -89,7 +114,7 @@ export default function ResumeUploader() {
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-slate-800">{fileDisplay}</div>
-                  <div className="text-xs text-slate-500">Uploaded successfully</div>
+                  <div className="text-xs text-slate-500">Processed & Analyzed by AI</div>
                 </div>
                 <div>
                   <button onClick={() => { setState("empty"); setFile(null); setProgress(0); }} className="text-sm text-slate-500 underline">Replace</button>
@@ -98,7 +123,7 @@ export default function ResumeUploader() {
 
               <div className="mt-6 flex items-center justify-end">
                 <button onClick={onAnalyze} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-white font-semibold shadow hover:bg-blue-700">
-                  Analyze Resume
+                  View Detailed Analysis
                 </button>
               </div>
             </motion.div>

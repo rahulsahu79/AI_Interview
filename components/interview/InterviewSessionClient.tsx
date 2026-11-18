@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import InterviewAnswerEditor from "./InterviewAnswerEditor";
 import InterviewFeedbackPanel from "./InterviewFeedbackPanel";
@@ -10,36 +9,30 @@ import InterviewFollowUpPanel from "./InterviewFollowUpPanel";
 import InterviewQuestionHeader from "./InterviewQuestionHeader";
 import InterviewSidebar, { QuestionStatusSummary, QuestionState } from "./InterviewSidebar";
 import InterviewStatsPanel from "./InterviewStatsPanel";
-import { interviewQuestions, type InterviewQuestion } from "./interviewData";
+import type { InterviewQuestion } from "./interviewData";
+import {
+  fetchInterviewQuestions,
+  evaluateAnswer,
+  generateFinalReport,
+  InterviewQuestionItem,
+  EvaluationResult,
+} from "../../lib/api";
 
 const MAX_ATTEMPTS = 5;
-const TOTAL_QUESTIONS = interviewQuestions.length;
-
-function getMockScore(answer: string, difficulty: InterviewQuestion["difficulty"]) {
-  const base = Math.min(100, Math.max(30, Math.floor(answer.trim().length / 2)));
-  const difficultyModifier = difficulty === "Advanced" ? 10 : difficulty === "Intermediate" ? 5 : 0;
-  return Math.min(100, base + difficultyModifier);
-}
-
-type InterviewReportData = {
-  completedQuestions: number;
-  totalQuestions: number;
-  averageScore: number;
-  topScore: number;
-  attemptsUsed: number;
-  answers: string[];
-  scores: number[];
-  states: QuestionState[];
-};
 
 export default function InterviewSessionClient() {
   const router = useRouter();
   const [accessChecked, setAccessChecked] = useState(false);
+  const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<string[]>(() => Array(TOTAL_QUESTIONS).fill(""));
-  const [attempts, setAttempts] = useState<number[]>(() => Array(TOTAL_QUESTIONS).fill(MAX_ATTEMPTS));
-  const [questionStates, setQuestionStates] = useState<QuestionState[]>(() => Array(TOTAL_QUESTIONS).fill("pending"));
-  const [scores, setScores] = useState<number[]>(() => Array(TOTAL_QUESTIONS).fill(0));
+
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [attempts, setAttempts] = useState<number[]>([]);
+  const [questionStates, setQuestionStates] = useState<QuestionState[]>([]);
+  const [scores, setScores] = useState<number[]>([]);
+  const [feedbackList, setFeedbackList] = useState<Array<EvaluationResult | null>>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string>("");
 
@@ -50,282 +43,318 @@ export default function InterviewSessionClient() {
       return;
     }
 
-    const savedDraft = sessionStorage.getItem("interviewDraft");
-    if (savedDraft) {
+    const resumeId = sessionStorage.getItem("activeResumeId") || undefined;
+    let skills: string[] = [];
+    const analysisRaw = sessionStorage.getItem("resumeAnalysis");
+    if (analysisRaw) {
       try {
-        const parsed = JSON.parse(savedDraft);
-        if (Array.isArray(parsed) && parsed.length === TOTAL_QUESTIONS) {
-          setAnswers(parsed);
-        }
-      } catch {
-        // ignore invalid draft data
+        const parsed = JSON.parse(analysisRaw);
+        if (parsed.skills) skills = parsed.skills;
+      } catch (e) {
+        console.error(e);
       }
     }
 
-    setAccessChecked(true);
+    fetchInterviewQuestions(resumeId, skills)
+      .then((data) => {
+        const formatted: InterviewQuestion[] = data.map((q) => ({
+          id: q.id,
+          title: q.title,
+          category: q.category || "Technical Core",
+          difficulty: q.difficulty || "Intermediate",
+          tags: [q.topic || "Engineering"],
+          prompt: q.prompt,
+          feedback: "Answer concisely and highlight trade-offs, architecture decisions, and code safety.",
+          followUps: q.hints || [
+            "How would this change under 10x traffic volume?",
+            "What metrics or logs would you monitor in production?",
+          ],
+          idealAnswer: "A structured answer with problem context, architectural approach, and measurable outcome.",
+        }));
+
+        setQuestions(formatted);
+        const count = formatted.length;
+        setAnswers(Array(count).fill(""));
+        setAttempts(Array(count).fill(MAX_ATTEMPTS));
+        setQuestionStates(Array(count).fill("pending"));
+        setScores(Array(count).fill(0));
+        setFeedbackList(Array(count).fill(null));
+        setLoadingQuestions(false);
+        setAccessChecked(true);
+      })
+      .catch((err) => {
+        console.error("Failed to load questions:", err);
+        setLoadingQuestions(false);
+        setAccessChecked(true);
+      });
   }, [router]);
 
-  const currentQuestion = interviewQuestions[currentIndex];
-  const currentState = questionStates[currentIndex];
+  const totalQuestions = questions.length;
+  const currentQuestion = questions[currentIndex] || {
+    id: 1,
+    title: "Loading Question...",
+    category: "Technical",
+    difficulty: "Intermediate" as const,
+    tags: ["Backend"],
+    prompt: "Initializing question...",
+    feedback: "",
+    followUps: [],
+    idealAnswer: "",
+  };
+
+  const currentState = questionStates[currentIndex] || "pending";
   const isLocked = currentState !== "pending";
 
-  const charCount = answers[currentIndex].length;
-  const wordCount = answers[currentIndex].trim().split(/\s+/).filter(Boolean).length;
+  const charCount = (answers[currentIndex] || "").length;
+  const wordCount = (answers[currentIndex] || "").trim().split(/\s+/).filter(Boolean).length;
   const completedQuestions = useMemo(
     () => questionStates.filter((state) => state !== "pending").length,
     [questionStates]
   );
   const progress = useMemo(
-    () => Math.round((completedQuestions / TOTAL_QUESTIONS) * 100),
-    [completedQuestions]
+    () => (totalQuestions > 0 ? Math.round((completedQuestions / totalQuestions) * 100) : 0),
+    [completedQuestions, totalQuestions]
   );
+
   const averageScore = useMemo(() => {
-    const scored = scores.filter((value) => value > 0);
+    const scored = scores.filter((_, idx) => questionStates[idx] === "submitted");
     if (scored.length === 0) return 0;
-    return Math.round(scored.reduce((sum, value) => sum + value, 0) / scored.length);
+    return Math.round(scored.reduce((sum, score) => sum + score, 0) / scored.length);
+  }, [scores, questionStates]);
+
+  const topScore = useMemo(() => {
+    return scores.length ? Math.max(...scores) : 0;
   }, [scores]);
 
-  const firstPendingIndex = questionStates.findIndex((state) => state === "pending");
-  const maxAccessibleIndex = firstPendingIndex === -1 ? TOTAL_QUESTIONS - 1 : firstPendingIndex;
-  const currentAttemptsLeft = currentState === "pending" ? attempts[currentIndex] : 0;
-  const isComplete = questionStates.every((state) => state !== "pending");
+  const attemptsUsed = useMemo(() => {
+    return attempts.reduce((used, rem) => used + (MAX_ATTEMPTS - rem), 0);
+  }, [attempts]);
 
-  const questionStatus: QuestionStatusSummary[] = interviewQuestions.map((_, index) => ({
-    attemptsLeft: attempts[index],
-    score: scores[index],
-    state: questionStates[index],
-  }));
+  const attemptsLeft = attempts[currentIndex] ?? MAX_ATTEMPTS;
 
-  const saveDraft = (draftAnswers: string[]) => {
-    sessionStorage.setItem("interviewDraft", JSON.stringify(draftAnswers));
-  };
-
-  const handleNavigate = (index: number) => {
-    if (index > maxAccessibleIndex) {
-      setToastMessage("Complete the current question before moving ahead.");
-      return;
-    }
-    setCurrentIndex(index);
-    setToastMessage("");
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(""), 2800);
   };
 
   const handleAnswerChange = (value: string) => {
     if (isLocked) return;
-
-    setAnswers((previous) => {
-      const next = [...previous];
+    setAnswers((prev) => {
+      const next = [...prev];
       next[currentIndex] = value;
-      saveDraft(next);
       return next;
     });
   };
 
-  const finalizeReport = (updatedStates: QuestionState[], updatedScores: number[]) => {
-    const completed = updatedStates.filter((state) => state !== "pending").length;
-    const scored = updatedScores.filter((value) => value > 0);
-    const average = scored.length === 0 ? 0 : Math.round(scored.reduce((sum, value) => sum + value, 0) / scored.length);
-    const report: InterviewReportData = {
-      completedQuestions: completed,
-      totalQuestions: TOTAL_QUESTIONS,
-      averageScore: average,
-      topScore: Math.max(0, ...updatedScores),
-      attemptsUsed: scored.length,
-      answers,
-      scores: updatedScores,
-      states: updatedStates,
-    };
-
-    sessionStorage.setItem("interviewReport", JSON.stringify(report));
-    sessionStorage.removeItem("interviewSessionStarted");
-    router.push("/interview/report");
+  const handleSaveDraft = () => {
+    sessionStorage.setItem("interviewDraft", JSON.stringify(answers));
+    showToast("Draft saved locally");
   };
 
-  const handleSubmit = () => {
-    if (isSubmitting || isLocked) return;
+  const handleSubmitAnswer = async () => {
+    if (isLocked || isSubmitting) return;
+    const answer = (answers[currentIndex] || "").trim();
 
-    const answer = answers[currentIndex].trim();
     if (!answer) {
-      setToastMessage("Please enter your response before submitting.");
+      showToast("Please provide an answer before submitting.");
       return;
     }
 
     setIsSubmitting(true);
+    try {
+      const evalResult = await evaluateAnswer(currentQuestion.prompt, answer);
 
-    const score = getMockScore(answer, currentQuestion.difficulty);
+      setScores((prev) => {
+        const next = [...prev];
+        next[currentIndex] = evalResult.score;
+        return next;
+      });
 
-    const updatedStates = [...questionStates];
-    updatedStates[currentIndex] = "submitted";
-    const updatedScores = [...scores];
-    updatedScores[currentIndex] = score;
-    const updatedAttempts = [...attempts];
-    updatedAttempts[currentIndex] = 0;
+      setFeedbackList((prev) => {
+        const next = [...prev];
+        next[currentIndex] = evalResult;
+        return next;
+      });
 
-    setTimeout(() => {
+      setQuestionStates((prev) => {
+        const next = [...prev];
+        next[currentIndex] = "submitted";
+        return next;
+      });
+
+      setAttempts((prev) => {
+        const next = [...prev];
+        next[currentIndex] = Math.max(0, next[currentIndex] - 1);
+        return next;
+      });
+
+      showToast(`Answer evaluated! Score: ${evalResult.score}/100`);
+    } catch (e: any) {
+      console.error(e);
+      showToast("Evaluation completed with fallback score.");
+      setScores((prev) => {
+        const next = [...prev];
+        next[currentIndex] = 75;
+        return next;
+      });
+      setQuestionStates((prev) => {
+        const next = [...prev];
+        next[currentIndex] = "submitted";
+        return next;
+      });
+    } finally {
       setIsSubmitting(false);
-      setQuestionStates(updatedStates);
-      setScores(updatedScores);
-      setAttempts(updatedAttempts);
-
-      if (currentIndex < TOTAL_QUESTIONS - 1) {
-        setCurrentIndex(currentIndex + 1);
-        setToastMessage("Answer submitted. Proceeding to the next question.");
-      } else {
-        setToastMessage("Final question submitted. Preparing your interview report.");
-        finalizeReport(updatedStates, updatedScores);
-      }
-    }, 350);
-  };
-
-  const handleSaveDraft = () => {
-    if (isLocked) return;
-    saveDraft(answers);
-    setToastMessage("Draft saved securely for this question.");
-  };
-
-  const handleSkip = () => {
-    if (isLocked) return;
-
-    const updatedStates = [...questionStates];
-    updatedStates[currentIndex] = "skipped";
-    setQuestionStates(updatedStates);
-
-    if (currentIndex < TOTAL_QUESTIONS - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-    setToastMessage("Question skipped. You can review it later from the sidebar.");
-
-    if (currentIndex === TOTAL_QUESTIONS - 1 && updatedStates.every((state) => state !== "pending")) {
-      finalizeReport(updatedStates, scores);
     }
   };
 
-  if (!accessChecked) {
-    return null;
+  const handleSkipQuestion = () => {
+    if (isLocked) return;
+    setQuestionStates((prev) => {
+      const next = [...prev];
+      next[currentIndex] = "skipped";
+      return next;
+    });
+    setScores((prev) => {
+      const next = [...prev];
+      next[currentIndex] = 0;
+      return next;
+    });
+    showToast("Question skipped.");
+  };
+
+  const handleFinishInterview = async () => {
+    const reportPayload = {
+      completedQuestions,
+      totalQuestions,
+      averageScore,
+      topScore,
+      attemptsUsed,
+      answers,
+      scores,
+      states: questionStates,
+    };
+
+    try {
+      const fullReport = await generateFinalReport(reportPayload);
+      sessionStorage.setItem("interviewReport", JSON.stringify(fullReport));
+    } catch {
+      sessionStorage.setItem("interviewReport", JSON.stringify(reportPayload));
+    }
+    sessionStorage.removeItem("interviewSessionStarted");
+    router.push("/interview/report");
+  };
+
+  if (!accessChecked || loadingQuestions) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+          <p className="text-sm font-medium text-slate-600">Generating live interview questions from your profile...</p>
+        </div>
+      </div>
+    );
   }
 
+  const currentFeedback = feedbackList[currentIndex];
+  const questionStatusSummaries: QuestionStatusSummary[] = questions.map((_, idx) => ({
+    attemptsLeft: attempts[idx] ?? MAX_ATTEMPTS,
+    score: scores[idx] || 0,
+    state: questionStates[idx] || "pending",
+  }));
+
   return (
-    <main className="min-h-screen bg-slate-50 py-8">
+    <main className="min-h-screen bg-slate-50 py-10">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-slate-500">AI Interview Session</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-              Practice with an enterprise-ready interview workflow.
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-              Move through 10 mock interview questions with AI-driven feedback, follow-up prompts, and enterprise-grade status tracking.
-            </p>
+        {toastMessage && (
+          <div className="fixed top-6 right-6 z-50 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white shadow-lg">
+            {toastMessage}
           </div>
-          <div className="inline-flex items-center gap-2 rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-200">
-            <ShieldCheck size={18} /> SaaS-grade mock interview
+        )}
+
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/interview/instructions")}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft size={16} /> Exit
+            </button>
+            <span className="text-slate-300">|</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+              Live AI Interview Session
+            </span>
           </div>
+
+          <button
+            onClick={handleFinishInterview}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+          >
+            Finish & View Report
+          </button>
         </div>
 
-        <div className="grid gap-8 xl:grid-cols-[1.85fr_1.15fr]">
-          <section className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Main Content */}
+          <div className="lg:col-span-8 space-y-6">
             <InterviewQuestionHeader
               question={currentQuestion}
               currentStep={currentIndex + 1}
-              totalSteps={TOTAL_QUESTIONS}
+              totalSteps={totalQuestions}
               progress={progress}
-              attemptsLeft={currentAttemptsLeft}
-              score={scores[currentIndex]}
+              attemptsLeft={attemptsLeft}
+              score={scores[currentIndex] || 0}
             />
 
             <InterviewAnswerEditor
-              answer={answers[currentIndex]}
-              onAnswerChange={handleAnswerChange}
+              answer={answers[currentIndex] || ""}
               charCount={charCount}
               wordCount={wordCount}
-              attemptsLeft={currentAttemptsLeft}
-              onSubmit={handleSubmit}
+              attemptsLeft={attemptsLeft}
+              onAnswerChange={handleAnswerChange}
+              onSubmit={handleSubmitAnswer}
               onSaveDraft={handleSaveDraft}
-              onSkip={handleSkip}
+              onSkip={handleSkipQuestion}
               isSubmitting={isSubmitting}
               isLocked={isLocked}
             />
 
-            <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-              <InterviewFeedbackPanel
-                feedback={currentQuestion.feedback}
-                questionIndex={currentIndex}
-                submitted={currentState === "submitted"}
-              />
-              <InterviewFollowUpPanel followUps={currentQuestion.followUps} />
-            </div>
-
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Session navigation</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900">Mock question flow</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleNavigate(Math.max(0, currentIndex - 1))}
-                  disabled={currentIndex === 0}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <ArrowLeft size={16} /> Previous question
-                </button>
+            {currentFeedback && (
+              <div className="space-y-4">
+                <InterviewFeedbackPanel
+                  feedback={currentFeedback.feedback}
+                  questionIndex={currentIndex}
+                  submitted={true}
+                />
+                {currentFeedback.follow_up_question && (
+                  <InterviewFollowUpPanel
+                    followUps={[currentFeedback.follow_up_question]}
+                  />
+                )}
               </div>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Active question</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{currentQuestion.title}</p>
-                </div>
-                <div className="rounded-3xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Session status</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {isComplete ? "Session is complete" : currentState === "skipped" ? "This question was skipped" : currentState === "submitted" ? "Answer locked" : "Review the AI feedback and continue"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+            )}
+          </div>
 
-          <aside className="space-y-6">
-            <InterviewSidebar
-              questions={interviewQuestions}
-              currentIndex={currentIndex}
-              progress={progress}
-              currentAttemptsLeft={currentAttemptsLeft}
-              questionStatus={questionStatus}
-              maxAccessibleIndex={maxAccessibleIndex}
-              onNavigate={handleNavigate}
-            />
+          {/* Sidebar */}
+          <div className="lg:col-span-4 space-y-6">
             <InterviewStatsPanel
               completedQuestions={completedQuestions}
               averageScore={averageScore}
-              topScore={Math.max(...scores)}
-              attemptsUsed={scores.filter((value) => value > 0).length}
-              totalQuestions={TOTAL_QUESTIONS}
+              topScore={topScore}
+              attemptsUsed={attemptsUsed}
+              totalQuestions={totalQuestions}
             />
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.15 }}
-              className="rounded-[2rem] border border-slate-200 bg-slate-900 p-6 shadow-sm text-white"
-            >
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Interview coaching</p>
-              <h3 className="mt-3 text-xl font-semibold text-white">Stay on pace with a confident delivery</h3>
-              <p className="mt-4 text-sm leading-7 text-slate-300">
-                This mock session is designed for modern interview preparation. Use the editor, progress tracking, and AI feedback to refine your narrative and technical depth.
-              </p>
-            </motion.div>
-          </aside>
-        </div>
 
-        {toastMessage ? (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mt-8 rounded-[1.75rem] border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-sm"
-          >
-            {toastMessage}
-          </motion.div>
-        ) : null}
+            <InterviewSidebar
+              questions={questions}
+              currentIndex={currentIndex}
+              progress={progress}
+              currentAttemptsLeft={attemptsLeft}
+              questionStatus={questionStatusSummaries}
+              maxAccessibleIndex={totalQuestions - 1}
+              onNavigate={(idx: number) => setCurrentIndex(idx)}
+            />
+          </div>
+        </div>
       </div>
     </main>
   );

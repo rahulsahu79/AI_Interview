@@ -22,7 +22,12 @@
 
 # misc
 .DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
 *.pem
+.vscode/
+.idea/
 
 # debug
 npm-debug.log*
