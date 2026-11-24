@@ -1,15 +1,7 @@
 import json
 from typing import Dict, Any, List
-from openai import OpenAI
-from app.core.config import settings
-
-def get_ai_client():
-    if settings.OPENROUTER_API_KEY:
-        return OpenAI(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL
-        )
-    return None
+from app.core.config import settings, get_ai_client
+from app.prompts.report_prompts import build_final_report_prompt
 
 async def generate_final_report(session_data: Dict[str, Any]) -> Dict[str, Any]:
     scores = session_data.get("scores", [])
@@ -36,19 +28,7 @@ async def generate_final_report(session_data: Dict[str, Any]) -> Dict[str, Any]:
             ]
         }
 
-    prompt = f"""
-    You are an executive engineering hiring committee chair.
-    Summarize the interview results for a candidate:
-    Average Score: {avg_score}/100
-    Top Score: {top_score}/100
-    Completed Questions: {completed} of {total}
-    
-    Return a JSON object:
-    {{
-      "verdict": "<concise 2-sentence hiring readiness verdict>",
-      "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
-    }}
-    """
+    prompt = build_final_report_prompt(avg_score, top_score, completed, total)
     try:
         response = client.chat.completions.create(
             model=settings.AI_MODEL,

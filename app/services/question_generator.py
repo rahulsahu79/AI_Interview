@@ -1,15 +1,7 @@
 import json
 from typing import List, Dict, Any
-from openai import OpenAI
-from app.core.config import settings
-
-def get_ai_client():
-    if settings.OPENROUTER_API_KEY:
-        return OpenAI(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL
-        )
-    return None
+from app.core.config import settings, get_ai_client
+from app.prompts.interview_prompts import build_question_generation_prompt
 
 def fallback_questions(skills: List[str], projects: List[Any]) -> List[Dict[str, Any]]:
     primary_skill = skills[0] if skills else "Python"
@@ -82,36 +74,7 @@ async def generate_questions_for_candidate(analysis: Dict[str, Any]) -> List[Dic
     if not client:
         return fallback_questions(skills, projects)
 
-    prompt = f"""
-    You are an elite technical interviewer designing a 5-round comprehensive technical interview for this candidate:
-    Candidate Profile:
-    - Skills: {', '.join(skills[:8]) if skills else 'Python, FastAPI, LangChain, MySQL'}
-    - Experience: {experience}
-    - Projects: {json.dumps(projects[:3]) if projects else 'Full-stack AI/Backend Projects'}
-    
-    You MUST generate EXACTLY 5 questions, corresponding to the 5 standard interview rounds:
-    Round 1 Category: "Resume Discussion" (Title: Resume & Prior Experience)
-    Round 2 Category: "Technical Skills Assessment" (Title: Core Technical & Language Mastery)
-    Round 3 Category: "Project Deep Dive" (Title: Project Architecture & Implementation)
-    Round 4 Category: "Problem Solving & Concepts" (Title: System Design, Scalability & Databases)
-    Round 5 Category: "Behavioral & HR Questions" (Title: Collaboration & Behavioral Scenarios)
-    
-    Return ONLY a JSON list with exactly 5 objects matching this structure:
-    [
-      {{
-        "id": 1,
-        "title": "<Concise descriptive title>",
-        "topic": "<Core topic>",
-        "category": "Resume Discussion",
-        "difficulty": "Intermediate",
-        "timeLimitMinutes": 8,
-        "prompt": "<Detailed, personalized question referencing candidate background>",
-        "hints": ["hint 1", "hint 2"],
-        "expectedKeywords": ["keyword1", "keyword2"]
-      }},
-      ...
-    ]
-    """
+    prompt = build_question_generation_prompt(skills, experience, projects)
     try:
         response = client.chat.completions.create(
             model=settings.AI_MODEL,
