@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 
 export default function HeroSection() {
   const router = useRouter();
+
+  const handleStartInterview = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token) {
+      router.push('/interview/upload');
+    } else {
+      router.push('/login');
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -73,8 +83,8 @@ export default function HeroSection() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-                onClick={() => router.push('/interview/upload')}
-                className="group flex items-center gap-2 rounded-lg bg-[#2563EB] px-8 py-4 text-lg font-semibold text-white shadow-lg hover:shadow-2xl hover:bg-[#1d4ed8] transition-all"
+              onClick={handleStartInterview}
+              className="group flex items-center gap-2 rounded-lg bg-[#2563EB] px-8 py-4 text-lg font-semibold text-white shadow-lg hover:shadow-2xl hover:bg-[#1d4ed8] transition-all cursor-pointer"
             >
               Start Free Interview
               <ArrowRight className="transition-transform group-hover:translate-x-1" size={20} />

@@ -6,6 +6,15 @@ import { useRouter } from "next/navigation";
 
 export default function FinalCTASection() {
   const router = useRouter();
+
+  const handleStartInterview = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token) {
+      router.push('/interview/upload');
+    } else {
+      router.push('/login');
+    }
+  };
   return (
     <section className="relative py-16 sm:py-24 bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] overflow-hidden">
       {/* Background Pattern */}
@@ -40,8 +49,8 @@ export default function FinalCTASection() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => router.push('/interview/upload')}
-              className="group flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-lg font-semibold text-[#2563EB] shadow-xl hover:shadow-2xl hover:bg-blue-50 transition-all"
+              onClick={handleStartInterview}
+              className="group flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-lg font-semibold text-[#2563EB] shadow-xl hover:shadow-2xl hover:bg-blue-50 transition-all cursor-pointer"
             >
               Start Free Interview
               <ArrowRight className="transition-transform group-hover:translate-x-1" size={20} />

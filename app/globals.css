@@ -9,7 +9,7 @@
   body {
     background: #ffffff;
     color: #0F172A;
-    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
 
   h1,
@@ -24,8 +24,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-inter);
-  --font-newsreader: var(--font-newsreader);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-newsreader: "Newsreader", ui-serif, Georgia, serif;
 
   /* Custom colors */
   --color-primary: #2563eb;
