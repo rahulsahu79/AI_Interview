@@ -1,19 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Newsreader } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
-  subsets: ["latin"],
-  weight: ["700"],
-  style: ["normal"],
-});
 
 export const metadata: Metadata = {
   title: "InterviewAI - AI-Powered Interview Preparation Platform",
@@ -51,11 +37,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${newsreader.variable} scroll-smooth`}
-    >
-      <body className="min-h-full flex flex-col bg-white antialiased">{children}</body>
+    <html lang="en" className="scroll-smooth">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:wght@700&display=swap"
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-white antialiased">
+        {children}
+      </body>
     </html>
   );
 }

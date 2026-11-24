@@ -1,4 +1,37 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ai-interview-qjs2.onrender.com";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://ai-interview-qjs2.onrender.com";
+
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+  }
+  return {};
+}
+
+async function apiRequest<T>(
+  path: string,
+  options: RequestInit,
+  fallbackError: string
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, options);
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json.detail || fallbackError);
+  }
+
+  return json as T;
+}
+
+export function saveAuthSession(data: AuthResponseData["data"]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("auth_token", data.access_token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+  document.cookie = `auth_token=${data.access_token}; path=/; max-age=604800; SameSite=Lax`;
+}
 
 export interface ProjectAnalysis {
   title: string;
@@ -59,47 +92,47 @@ export interface FinalReportResult {
   recommendations: string[];
 }
 
-export async function uploadAndAnalyzeResume(file: File): Promise<UploadResumeResponse> {
+export async function uploadAndAnalyzeResume(
+  file: File
+): Promise<UploadResumeResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE_URL}/api/v1/resume/upload`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Failed to upload and analyze resume");
-  }
-
-  return res.json();
+  return apiRequest<UploadResumeResponse>(
+    "/api/v1/resume/upload",
+    {
+      method: "POST",
+      headers: { ...getAuthHeaders() },
+      body: formData,
+    },
+    "Failed to upload and analyze resume"
+  );
 }
 
-export async function fetchResumeById(resumeId: string): Promise<UploadResumeResponse["data"]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/resume/${resumeId}`);
-  if (!res.ok) {
-    throw new Error("Could not fetch resume details");
-  }
-  const data = await res.json();
-  return data.data;
+export async function fetchResumeById(
+  resumeId: string
+): Promise<UploadResumeResponse["data"]> {
+  const res = await apiRequest<{ data: UploadResumeResponse["data"] }>(
+    `/api/v1/resume/${resumeId}`,
+    { headers: { ...getAuthHeaders() } },
+    "Could not fetch resume details"
+  );
+  return res.data;
 }
 
 export async function fetchInterviewQuestions(
   resumeId?: string,
   skills?: string[]
 ): Promise<InterviewQuestionItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/interview/questions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resume_id: resumeId, skills }),
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to generate interview questions");
-  }
-
-  const json = await res.json();
+  const json = await apiRequest<{ questions?: InterviewQuestionItem[] }>(
+    "/api/v1/interview/questions",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ resume_id: resumeId, skills }),
+    },
+    "Failed to generate interview questions"
+  );
   return json.questions || [];
 }
 
@@ -107,17 +140,15 @@ export async function evaluateAnswer(
   question: string,
   answer: string
 ): Promise<EvaluationResult> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/interview/evaluate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, answer }),
-  });
-
-  if (!res.ok) {
-    throw new Error("Evaluation failed");
-  }
-
-  const json = await res.json();
+  const json = await apiRequest<{ data: EvaluationResult }>(
+    "/api/v1/interview/evaluate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ question, answer }),
+    },
+    "Evaluation failed"
+  );
   return json.data;
 }
 
@@ -131,16 +162,76 @@ export async function generateFinalReport(payload: {
   scores: number[];
   states: string[];
 }): Promise<FinalReportResult> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/report/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const json = await apiRequest<{ data: FinalReportResult }>(
+    "/api/v1/report/generate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(payload),
+    },
+    "Report generation failed"
+  );
+  return json.data;
+}
 
-  if (!res.ok) {
-    throw new Error("Report generation failed");
-  }
+export interface UserData {
+  id: string;
+  username: string;
+  email: string;
+  full_name?: string | null;
+  created_at?: string;
+}
 
-  const json = await res.json();
+export interface AuthResponseData {
+  message: string;
+  data: {
+    access_token: string;
+    token_type: string;
+    user: UserData;
+  };
+}
+
+export async function registerUser(payload: {
+  username: string;
+  email: string;
+  password: string;
+  full_name?: string;
+}): Promise<AuthResponseData> {
+  return apiRequest<AuthResponseData>(
+    "/api/v1/auth/register",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Registration failed"
+  );
+}
+
+export async function loginUser(payload: {
+  email: string;
+  password: string;
+}): Promise<AuthResponseData> {
+  return apiRequest<AuthResponseData>(
+    "/api/v1/auth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Login failed"
+  );
+}
+
+export async function fetchCurrentUser(token: string): Promise<UserData> {
+  const json = await apiRequest<{ data: UserData }>(
+    "/api/v1/auth/me",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "Failed to fetch user profile"
+  );
   return json.data;
 }
