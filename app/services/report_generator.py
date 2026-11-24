@@ -1,16 +1,7 @@
 import json
 from typing import Dict, Any, List
-from openai import OpenAI
-from app.core.config import settings
+from app.core.config import settings, get_ai_client
 from app.prompts.report_prompts import build_final_report_prompt
-
-def get_ai_client():
-    if settings.OPENROUTER_API_KEY:
-        return OpenAI(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL
-        )
-    return None
 
 async def generate_final_report(session_data: Dict[str, Any]) -> Dict[str, Any]:
     scores = session_data.get("scores", [])

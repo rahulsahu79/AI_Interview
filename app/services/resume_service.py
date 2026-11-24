@@ -1,17 +1,8 @@
 import json
 import re
 from typing import Dict, Any, List
-from openai import OpenAI
-from app.core.config import settings
+from app.core.config import settings, get_ai_client
 from app.prompts.resume_prompts import build_resume_analysis_prompt
-
-def get_ai_client():
-    if settings.OPENROUTER_API_KEY:
-        return OpenAI(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL
-        )
-    return None
 
 def fallback_resume_analysis(resume_text: str) -> Dict[str, Any]:
     tech_pool = [

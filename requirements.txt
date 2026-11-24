@@ -20,6 +20,13 @@ pydantic-settings
 python-dotenv
 
 # ==============================
+# Security & Authentication
+# ==============================
+bcrypt
+pyjwt
+email-validator
+
+# ==============================
 # Resume Parsing
 # ==============================
 PyMuPDF

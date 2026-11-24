@@ -1,16 +1,7 @@
 import json
 from typing import List, Dict, Any
-from openai import OpenAI
-from app.core.config import settings
+from app.core.config import settings, get_ai_client
 from app.prompts.interview_prompts import build_question_generation_prompt
-
-def get_ai_client():
-    if settings.OPENROUTER_API_KEY:
-        return OpenAI(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL
-        )
-    return None
 
 def fallback_questions(skills: List[str], projects: List[Any]) -> List[Dict[str, Any]]:
     primary_skill = skills[0] if skills else "Python"

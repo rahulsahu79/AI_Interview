@@ -18,6 +18,14 @@ from app.schemas.report import (
     ReportResultData,
     ReportResponse
 )
+from app.schemas.user import (
+    UserRegisterRequest,
+    UserLoginRequest,
+    UserData,
+    TokenData,
+    AuthResponse,
+    UserProfileResponse
+)
 
 __all__ = [
     "ProjectAnalysisSchema",
@@ -33,5 +41,11 @@ __all__ = [
     "EvaluateAnswerResponse",
     "ReportRequest",
     "ReportResultData",
-    "ReportResponse"
+    "ReportResponse",
+    "UserRegisterRequest",
+    "UserLoginRequest",
+    "UserData",
+    "TokenData",
+    "AuthResponse",
+    "UserProfileResponse"
 ]
